@@ -50,8 +50,8 @@ VALUES
 ("MOV_2","Parasite","Y",2020,"Thriller",0.99,8.6),
 ("MOV_3","The Shape of Water","Y",2018,"Romance",0.92,7.3),
 ("MOV_4","Star Wars: Rise of Skywalker","N",NULL,"Action/Adventure",0.51,6.6),
-("MOV_5","Joker","N",NULL,"Crime/Drama",0.68,8.5),
-("MOV_6","1917","N",NULL,"War/Drama",0.89,8.3);
+("MOV_5","Joker","N",NULL,"Drama",0.68,8.5),
+("MOV_6","1917","N",NULL,"Drama",0.89,8.3);
 
 --Creating the table for person information
 CREATE TABLE public."tblPersons"
