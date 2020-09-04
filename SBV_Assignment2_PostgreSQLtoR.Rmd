@@ -5,9 +5,6 @@ date: "9/1/2020"
 output:
   pdf_document: default
   html_document:
-    includes:
-      in_header: header.html
-    css: ./lab.css
     highlight: pygments
     theme: cerulean
     toc: true
@@ -316,9 +313,8 @@ recommend_df <- merge(
 \newpage
 ```{r creating-recommend-df-table}
 #Creating table to show list of movies not seen and average genre rating
-kable(
-  recommend_df,
-  format = "latex",
+kbl(
+  recommend_df[c("FirstName","MovieTitle","Genre","AverageGenreRating")],
   booktabs=T,
   caption = "List movies not seen with average genre rating"
 ) %>% kable_styling(
@@ -366,10 +362,10 @@ kable(
 )
 ```
 
-Based on *Table 13: Final List of Recommended Movies*, I would have to recommend 1917 to Ashley, Anna, Samantha, and Daniella, while recommending Avengers: Endgame to Dana. These recommendations should be taken with a grain of salt as there is not enough data to make an especially accurate recommendation.
+Based on *Table 13: Final List of Recommended Movies*, I would have to recommend 1917 to Ashley, Anna, Samantha, and Daniella, while recommending Avengers: Endgame to Dana. This conclusion,however, should be taken with a grain of salt as there is not enough data to make an accurate recommendation.
 
-This accuracy issue could be remedied by collecting more ratings and more information about each movie. First, I would like to collect more movie ratings for to get a more robust number for the average genre rating. Secondly, I would love to add additional data for the movie. Some examples include, the gender of the lead actor, release date to group by month of release, and Oscar nominations and awards won.
+This accuracy issue could be remedied by collecting more ratings and more information about each movie. First, I would like to collect more movie ratings expanding the genre pool and making the genre rating averages more robust. Secondly, I would love to add additional data for each movie. Some examples include, the gender of the lead actor, release date (to group by month of release), and Oscar nominations and awards won.
 
-Creating a larger dataset with more descriptive information about the movies can help create a better movie recommendation list for each survey participant.
+Creating a larger dataset with more descriptive information about the movies and expanding the available genres of movies can help create a better movie recommendation list for each survey participant.
 
 
