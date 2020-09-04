@@ -1,0 +1,375 @@
+---
+title: 'Assignment #2 - SQL and R'
+author: "Stefano Biguzzi"
+date: "9/1/2020"
+output:
+  pdf_document: default
+  html_document:
+    includes:
+      in_header: header.html
+    css: ./lab.css
+    highlight: pygments
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+params:
+  pwd:
+    label: "Enter the PostgreSQL password please"
+    value: ""
+    input: password
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RPostgreSQL)
+library(RPostgres)
+library(DBI)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+# ETL Process
+
+## Create Connection to Local PostgreSQL database and getting tables
+
+### Creating connection
+```{r create-connection}
+con <- dbConnect(
+  RPostgres::Postgres(),
+  dbname = "MovieRatings",
+  host="localhost",
+  port="5432",
+  user="postgres",
+  password=params$pwd)
+```
+
+### Setting tables to dataframes
+
+**Loading tblPersons and removing any white spaces**
+```{r loading-tblPersons}
+#Loading person data
+person_df <- dbGetQuery(
+  con,
+  'Select * From public."tblPersons"'
+)
+```
+```{r clearing-person-ws}
+#Clearing white spaces
+for (i in names(person_df)) {
+  person_df[[i]] <- trimws(
+    person_df[[i]],
+    which = c("both", "left", "right"),
+    whitespace = "[ \t\r\n]"
+  )
+}
+```
+```{r creating-person-table}
+#Creating person table
+kable(person_df,format = "markdown",caption = "Person Data")
+```
+
+**Loading tblMovies and removing any white spaces**
+```{r loading-tblMovies}
+#Loading movie data
+movie_df <- dbGetQuery(
+  con,
+  'Select * From public."tblMovies"'
+)
+```
+```{r clearing-movie-ws}
+#Clearing movie data white spaces
+for (i in names(movie_df)) {
+  if (is.character(movie_df[[i]])) {
+    movie_df[[i]] <- trimws(
+      movie_df[[i]],
+      which = c("both", "left", "right"),
+      whitespace = "[ \t\r\n]"
+    )
+  }
+}
+```
+```{r creating-movie-table}
+#Creating movie data table
+kbl(movie_df, caption = "Movie Data", booktabs = T) %>%
+    kable_styling(
+      latex_options = c("scale_down", "hold_position")
+    )
+```
+
+\newpage
+**Loading tblRatings and removing any white spaces**
+```{r loading-tblRatings}
+#Loading ratings data
+ratings_df <- dbGetQuery(
+  con,
+  'Select * From public."tblRatings"'
+)
+```
+```{r clearing-ratings-ws}
+#Removing white spaces in rating data
+for (i in names(ratings_df)) {
+  if (is.character(ratings_df[[i]])) {
+    ratings_df[[i]] <- trimws(
+      ratings_df[[i]],
+      which = c("both", "left", "right"),
+      whitespace = "[ \t\r\n]"
+    )
+  }
+}
+```
+```{r creating-ratings-table}
+#Creating ratings data table
+kable(
+  ratings_df,
+  format = "markdown",
+  caption = "Movie Ratings Raw"
+)
+```
+\newpage
+## Dealing with missing data
+In the ratings dataframe for the MovieRating column, I decided to create two dataframes, one for seen movies with ratings and one for non seen movies. This can allow us to run different statistical analyses on the different types of movies, seen and unseen.
+
+### Figure out how many nulls there are in the MovieRatings column
+```{r counting-nulls}
+#Counting the nulls
+kable(
+  table(is.na(ratings_df$MovieRating)),
+  format = "markdown"
+)
+```
+
+### Create dataframe for movie ratings that were seen
+```{r subsetting-seen-movies}
+#Subsetting data
+seen_ratings_df <- subset(
+  ratings_df,!is.na(ratings_df$MovieRating)
+)
+```
+```{r creating-seen-table}
+#Creating table of seen movies
+rownames(seen_ratings_df) <- NULL
+kable(
+  seen_ratings_df,
+  format = "markdown",
+  caption = "Rated Movies"
+)
+```
+
+### Create dataframe for movies that were not seen
+```{r subsetting-not-seen-movies}
+#Subsetting movies with no rating
+not_seen_df <-
+  subset(ratings_df,is.na(ratings_df$MovieRating))
+```
+```{r drop-movie-rating}
+#Dropping movie rating
+not_seen_df <-
+  subset(not_seen_df, select = -MovieRating)
+```
+```{r create-not seen list}
+#Create the list of PersonID and MovieID
+rownames(not_seen_df) <- NULL
+kable(not_seen_df,format = "markdown",caption = "Not Seen Movie List")
+```
+
+
+# Recommendation Analysis
+
+To create a recommendation of a movie for the people that have not seen all six movies, I want to start by grabbing the *not_seen_df* and merge on the movie title and movie genre. Then I want to subset the *seen_ratings_df* to only the people that have a row in the *not_seen_df*. I will then summarize the *seen_ratings_df* to understand the number of movies and the average rating by genre. Finally I will merge the summary data to the *not_seen_df* and find a movies that match genre and the genre has an average rating above 3.5. I will recommend movies based on those criteria.
+
+## Merge the not seen data with movie data
+Take the not seen data and merge it with the movie data to get movie title and movie genre. This will help in understanding the genre of the movies that were not watched
+
+```{r not-seen-genre}
+#Merging the movie_df with not_seen_df
+not_seen_movie_merge_df <- merge(
+  not_seen_df,
+  movie_df[,c("MovieID","MovieTitle","Genre")],
+  by = "MovieID"
+)
+```
+```{r create-unique-not-seen}
+#Creating unique list of movies not seen
+not_seen_unique_df <- not_seen_movie_merge_df[
+  row.names(unique(
+    not_seen_movie_merge_df[,c(
+      "MovieTitle", "Genre"
+    )]
+  )),
+  c("MovieTitle","Genre")
+]
+```
+
+```{r creating-not-seen-merge-table}
+#Creating the table for not seen movie merge table
+rownames(not_seen_unique_df) <- NULL
+kable(
+  not_seen_unique_df,
+  format = "markdown",
+  caption = "List of not seen movies"
+)
+```
+## Subset the seen movie ratings
+Subsetting the *seen_ratings_df* to only people that are in the *not_seen_df*
+```{r subset-seen-movies}
+#Subsetting seen movies to only people who are also in the not seen movie list
+person_to_recommend_df <-
+  subset(
+    seen_ratings_df,
+    PersonID %in% not_seen_df$PersonID)
+```
+```{r create-person-to-recommend-table}
+#Creating the table of ratings for people who have not seen all movies
+rownames(person_to_recommend_df) <- NULL
+kable(
+  person_to_recommend_df,
+  format = "markdown",
+  caption = "Ratings for movies of people who show up in not seen list"
+)
+```
+
+## Merging movie data to subsetted ratings data frame
+Adding column movie title and genre from *movie_df* to the new data frame *person_to_recommend_df*
+```{r adding-movie-info}
+#Adding movie info to table of ratings for people who have not seen all movies
+person_to_recommend_df <- merge(
+  merge(
+    person_to_recommend_df,
+    movie_df[,c("MovieID","MovieTitle","Genre")],
+    by = "MovieID"
+  ),
+  person_df[,c("PersonID","FirstName")],
+  by = "PersonID"
+)
+```
+```{r creating-person-to-recommend-table2}
+#Creating rating table for people who watched less than 6 movies
+kable(
+  person_to_recommend_df[c("FirstName","MovieTitle","Genre","MovieRating")],
+  format = "markdown",
+  caption = "Person and movie ratings for people who watched < 6 movies"
+)
+```
+
+## Creating summary statistics table
+Summarizing the subsetted dataframe, *person_to_recommend_df*. Finding out the number of movies and the avg rating per person and genre
+```{r create-number-of-movies}
+#Creating number of movies seen per genre
+seen_summary_df <- data.frame(
+  person_to_recommend_df %>%
+    group_by(PersonID,FirstName) %>%
+    count(Genre)
+)
+```
+```{r renaming-n-to-numbermovieseen}
+#Renaming the count column
+names(seen_summary_df)[names(seen_summary_df) == "n"] <- "NumberMoviesSeen"
+```
+```{r creating-avg-rating-by-person-genre}
+#Creating the average rating by person and genre
+seen_rating_average_df <- data.frame(
+  person_to_recommend_df %>%
+    group_by(PersonID,Genre) %>%
+    summarize_at(vars(MovieRating),mean)
+)
+```
+```{r creating-final-seen-summary}
+#Creating the final version of seen summary dataframe
+seen_summary_df <- merge(
+  seen_summary_df,
+  seen_rating_average_df,
+  by = c("PersonID","Genre")
+)
+```
+```{r renaming-movierating-avg-genre-rating}
+#Renaming the movie rating column to average genre rating
+names(seen_summary_df)[names(seen_summary_df) == "MovieRating"] <- "AverageGenreRating"
+```
+```{r creating-seen-summary-table}
+#Creating table of seen summary dataframe
+kable(
+  seen_summary_df[,c(
+    "FirstName",
+    "Genre",
+    "NumberMoviesSeen",
+    "AverageGenreRating"
+  )],
+  format = "markdown",
+  caption = "Summary stats for people with < 6 watched movies"
+)
+```
+## Creating recommended movie list
+The final stage is to create a recommended movie list for people who have not seen all the six movies.
+### Create recommended list
+This list includes movies in genres that were low rated by person. The next step would be to subset this data to include only the movies that are part of a genre above a 3.5 mean rating.
+```{r recommend-df}
+#Creating the recommend dataframe
+recommend_df <- merge(
+  not_seen_movie_merge_df,
+  seen_summary_df,
+  by = c("PersonID","Genre")
+)
+```
+\newpage
+```{r creating-recommend-df-table}
+#Creating table to show list of movies not seen and average genre rating
+kable(
+  recommend_df,
+  format = "latex",
+  booktabs=T,
+  caption = "List movies not seen with average genre rating"
+) %>% kable_styling(
+  latex_options=c("scale_down","hold_position")
+)
+```
+
+### Subset full recommended list to higher rated genres
+```{r subset-recommended}
+#Subsetting recommend table to only pull movies with genre ratings above 3.5
+final_df <- subset(recommend_df,AverageGenreRating >= 3.5)
+```
+```{r reordering-columns}
+#Reordering columns for readability
+col_order <- c("FirstName","MovieTitle","Genre","AverageGenreRating")
+final_df <- final_df[,col_order]
+```
+```{r creating-full-list-recommend-movies}
+#Creating full list of movies to recommend
+rownames(final_df) <- NULL
+kable(
+  final_df,
+  format = "markdown",
+  caption = "full list of movies with highest genre rating to recommend"
+)
+```
+
+# Conclusion
+
+```{r final-table}
+#Subsetting final list to only one movie per person
+final_table <- final_df %>%
+  group_by(FirstName) %>%
+  top_n(1, AverageGenreRating)
+```
+```{r create-final-table}
+#Creating final recommend list with one movie per person
+rownames(final_table) <- NULL
+kable(
+  final_table,
+  format = "markdown",
+  col.names = c("First Name","Movie","Genre","Average Genre Rating"),
+  caption = "Final List of Recommended Movies",
+  align = "lllc"
+)
+```
+
+Based on *Table 13: Final List of Recommended Movies*, I would have to recommend 1917 to Ashley, Anna, Samantha, and Daniella, while recommending Avengers: Endgame to Dana. These recommendations should be taken with a grain of salt as there is not enough data to make an especially accurate recommendation.
+
+This accuracy issue could be remedied by collecting more ratings and more information about each movie. First, I would like to collect more movie ratings for to get a more robust number for the average genre rating. Secondly, I would love to add additional data for the movie. Some examples include, the gender of the lead actor, release date to group by month of release, and Oscar nominations and awards won.
+
+Creating a larger dataset with more descriptive information about the movies can help create a better movie recommendation list for each survey participant.
+
+
